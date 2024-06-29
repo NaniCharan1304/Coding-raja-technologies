@@ -1,84 +1,88 @@
-import json
-import os
+import csv
 from datetime import datetime
 
-class Task:
-    def __init__(self, description, priority, due_date=None):
-        self.description = description
-        self.priority = priority
-        self.due_date = due_date
-        self.completed = False
-
-    def __str__(self):
-        status = "Completed" if self.completed else "Pending"
-        return f"{self.description} - Priority: {self.priority}, Due Date: {self.due_date}, Status: {status}"
-
-class ToDoList:
-    def __init__(self, filename):
+class BudgetTracker:
+    def __init__(self, filename='transactions.csv'):
         self.filename = filename
-        self.tasks = []
+        self.transactions = self.load_transactions()
 
-    def load_tasks(self):
-        if os.path.exists(self.filename):
-            with open(self.filename, 'r') as file:
-                data = json.load(file)
-                for task_data in data:
-                    task = Task(task_data['description'], task_data['priority'], task_data['due_date'])
-                    task.completed = task_data['completed']
-                    self.tasks.append(task)
+    def load_transactions(self):
+        transactions = []
+        try:
+            with open(self.filename, mode='r') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    row['amount'] = float(row['amount'])
+                    transactions.append(row)
+        except FileNotFoundError:
+            pass
+        return transactions
 
-    def save_tasks(self):
-        with open(self.filename, 'w') as file:
-            data = [{'description': task.description, 'priority': task.priority,
-                     'due_date': task.due_date, 'completed': task.completed} for task in self.tasks]
-            json.dump(data, file, indent=4)
+    def save_transactions(self):
+        with open(self.filename, mode='w', newline='') as file:
+            fieldnames = ['date', 'type', 'category', 'amount']
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+            for transaction in self.transactions:
+                writer.writerow(transaction)
 
-    def add_task(self, description, priority, due_date=None):
-        task = Task(description, priority, due_date)
-        self.tasks.append(task)
+    def add_transaction(self, type, category, amount):
+        transaction = {
+            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'type': type,
+            'category': category,
+            'amount': amount
+        }
+        self.transactions.append(transaction)
+        self.save_transactions()
 
-    def remove_task(self, index):
-        del self.tasks[index]
+    def calculate_budget(self):
+        income = sum(t['amount'] for t in self.transactions if t['type'] == 'income')
+        expenses = sum(t['amount'] for t in self.transactions if t['type'] == 'expense')
+        return income - expenses
 
-    def mark_task_completed(self, index):
-        self.tasks[index].completed = True
+    def analyze_expenses(self):
+        categories = {}
+        for t in self.transactions:
+            if t['type'] == 'expense':
+                if t['category'] in categories:
+                    categories[t['category']] += t['amount']
+                else:
+                    categories[t['category']] = t['amount']
+        return categories
 
-    def list_tasks(self):
-        for index, task in enumerate(self.tasks):
-            print(f"{index + 1}. {task}")
+    def display_menu(self):
+        print("\nPersonal Budget Tracker")
+        print("1. Add Income")
+        print("2. Add Expense")
+        print("3. View Budget")
+        print("4. Analyze Expenses")
+        print("5. Exit")
 
-def main():
-    todo_list = ToDoList("tasks.json")
-    todo_list.load_tasks()
+    def run(self):
+        while True:
+            self.display_menu()
+            choice = input("Choose an option: ")
+            if choice == '1':
+                category = input("Enter income category: ")
+                amount = float(input("Enter income amount: "))
+                self.add_transaction('income', category, amount)
+            elif choice == '2':
+                category = input("Enter expense category: ")
+                amount = float(input("Enter expense amount: "))
+                self.add_transaction('expense', category, amount)
+            elif choice == '3':
+                budget = self.calculate_budget()
+                print(f"Remaining budget: ${budget:.2f}")
+            elif choice == '4':
+                expenses = self.analyze_expenses()
+                for category, amount in expenses.items():
+                    print(f"{category}: ${amount:.2f}")
+            elif choice == '5':
+                break
+            else:
+                print("Invalid choice. Please try again.")
 
-    while True:
-        print("\n1. Add Task")
-        print("2. Remove Task")
-        print("3. Mark Task as Completed")
-        print("4. List Tasks")
-        print("5. Quit")
-        choice = input("Enter your choice: ")
-
-        if choice == "1":
-            description = input("Enter task description: ")
-            priority = input("Enter priority (high/medium/low): ")
-            due_date = input("Enter due date (YYYY-MM-DD): ")
-            todo_list.add_task(description, priority, due_date)
-            todo_list.save_tasks()
-        elif choice == "2":
-            index = int(input("Enter task index to remove: ")) - 1
-            todo_list.remove_task(index)
-            todo_list.save_tasks()
-        elif choice == "3":
-            index = int(input("Enter task index to mark as completed: ")) - 1
-            todo_list.mark_task_completed(index)
-            todo_list.save_tasks()
-        elif choice == "4":
-            todo_list.list_tasks()
-        elif choice == "5":
-            break
-        else:
-            print("Invalid choice. Please try again.")
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    tracker = BudgetTracker()
+    tracker.run()
